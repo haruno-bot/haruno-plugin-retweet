@@ -112,7 +112,7 @@ func handleAvatar(id, name, url string, groupNums []int64) {
 	log.Println(escapeCRLF(logMsg))
 	logger.Service.AddLog(logger.LogTypeInfo, logMsg)
 	for _, groupID := range groupNums {
-		coolq.Client.SendGroupMsg(groupID, cqMsgTxt+"\r\nFrom Haruno Bot")
+		coolq.Client.SendGroupMsg(groupID, cqMsgTxt)
 	}
 	logMsg = fmt.Sprintf("成功转发了一条来自%s(%s)的头像更新信息", name, id)
 	log.Println(logMsg)
@@ -172,7 +172,7 @@ func (_plugin Retweet) Load() error {
 				log.Println(escapeCRLF(logMsg))
 				logger.Service.AddLog(logger.LogTypeInfo, logMsg)
 				for _, groupID := range groupNums {
-					coolq.Client.SendGroupMsg(groupID, cqMsgTxt+"\r\nFrom Haruno Bot")
+					coolq.Client.SendGroupMsg(groupID, cqMsgTxt)
 				}
 				logMsg = fmt.Sprintf("成功转发了一条来自%s(%s)的推文", msg.FromName, msg.FromID)
 				log.Println(logMsg)
