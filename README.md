@@ -12,3 +12,7 @@
 ## Tips
 
 给qq群转发特定推特账号消息用，推文api推送为ws形式，具体服务不对外公开。
+
+## License
+
+The MIT License
