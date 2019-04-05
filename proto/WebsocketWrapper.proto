@@ -1,0 +1,24 @@
+syntax = "proto3";// 版本
+package kcwiki.msgtransfer.protobuf; // 命名空间
+
+option java_package = "protobuf.proto";//生成java包名
+option java_outer_classname = "WebsocketProto"; //生成Java类名
+option java_multiple_files = true;
+
+message Websocket {
+    enum ProtoType {
+        SYSTEM = 0;
+        NON_SYSTEM = 1;
+    }
+    enum ProtoCode {
+        FAIL = 0;
+        SUCCESS = 1;
+        ERROR = 2;
+    }
+    ProtoType proto_type = 1;
+    ProtoCode proto_code = 2;
+    bytes proto_payload = 5;
+    int64 timestamp = 3;
+    string sign = 4;
+
+}

@@ -11,6 +11,8 @@ type Cfg struct {
 	URL       string      `toml:"url"`
 	Version   string      `toml:"version"`
 	Broadcast []Broadcast `toml:"broadcast"`
+	Secret    string      `toml:"secret"`
+	Module    string      `toml:"module"`
 	ImageRoot string      `toml:"imageRoot"`
 }
 

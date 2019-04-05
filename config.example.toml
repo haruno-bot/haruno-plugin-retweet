@@ -4,6 +4,8 @@ version = "0.0.1"
 name = "haruno-plugin-retweet"
 imageRoot = "/path/to"
 url = "twitter_api_url"
+secret = "secret"
+module = "xxxx"
   [[retweet.broadcast]]
     account = "123456"
     accounts = ["123456"]

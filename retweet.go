@@ -4,8 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/haruno-bot/haruno/logger"
+	"github.com/haruno-bot/retweet/kcwiki_msgtransfer_protobuf"
 
 	"github.com/BurntSushi/toml"
 
@@ -19,6 +22,8 @@ type Retweet struct {
 	name      string
 	url       string
 	version   string
+	secret    string
+	module    string
 	broadcast map[string][]int64
 	imageRoot string
 	conn      *clients.WSClient
@@ -64,6 +69,8 @@ func (_plugin *Retweet) loadConfig() error {
 	pcfg := cfg.Retweet
 	_plugin.name = pcfg.Name
 	_plugin.url = pcfg.URL
+	_plugin.module = pcfg.Module
+	_plugin.secret = pcfg.Secret
 	_plugin.imageRoot = pcfg.ImageRoot
 	_plugin.version = pcfg.Version
 	_plugin.broadcast = make(map[string][]int64)
@@ -93,18 +100,15 @@ func handleAvatar(id, name, url string, groupNums []int64) {
 	cqMsg := coolq.NewMessage()
 	section := coolq.NewTextSection(fmt.Sprintf("%s\n更新了头像\n", name))
 	cqMsg = coolq.AddSection(cqMsg, section)
-	logMsg := fmt.Sprintf("头像地址： %s", url)
-	logger.Service.AddLog(logger.LogTypeInfo, logMsg)
+	logger.Service.Infof("Plugin retweet: 头像地址 = %s", url)
 	section = coolq.NewImageSection(url)
 	cqMsg = coolq.AddSection(cqMsg, section)
 	cqMsgTxt := string(coolq.Marshal(cqMsg))
-	logMsg = fmt.Sprintf("向酷Q发送： %s", cqMsgTxt)
-	logger.Service.AddLog(logger.LogTypeInfo, logMsg)
+	logger.Service.Infof("Plugin retweet: 向酷Q发送 -> %s", cqMsgTxt)
 	for _, groupID := range groupNums {
 		coolq.Client.SendGroupMsg(groupID, cqMsgTxt)
 	}
-	logMsg = fmt.Sprintf("成功转发了一条来自%s(%s)的头像更新信息", name, id)
-	logger.Service.AddLog(logger.LogTypeSuccess, logMsg)
+	logger.Service.Successf("Plugin retweet: 成功转发了一条来自%s(%s)的头像更新信息", name, id)
 }
 
 // Load 插件加载
@@ -113,64 +117,89 @@ func (_plugin Retweet) Load() error {
 	if err != nil {
 		return err
 	}
-	imgRoot := _plugin.imageRoot
+
 	_plugin.conn = &clients.WSClient{
-		Name: "Retweet Plugin",
+		Name: "Plugin retweet",
 		OnConnect: func(conn *clients.WSClient) {
-			msg := fmt.Sprintf("%s 已经连接到转推api服务器", conn.Name)
-			logger.Service.AddLog(logger.LogTypeInfo, msg)
+			logger.Service.Infof("%s 已经连接到转推api服务器", conn.Name)
 		},
 		OnMessage: func(raw []byte) {
-			msg := new(TweetMsg)
-			err := json.Unmarshal(raw, msg)
+			wsWrapper := new(kcwiki_msgtransfer_protobuf.Websocket)
+			err := proto.Unmarshal(raw, wsWrapper)
 			if err != nil {
-				logger.Service.AddLog(logger.LogTypeError, err.Error())
+				logger.Service.Errorf("Plugin retweet: %s", err.Error())
 				return
 			}
-			if !coolq.Client.IsAPIOk() {
-				if msg.Cmd == "1" || msg.Cmd == "2" {
-					errMsg := fmt.Sprintf("一条来自%s的消息被弄丢了(因为api连接没有准备好)", msg.FromName)
-					logger.Service.AddLog(logger.LogTypeError, errMsg)
+			switch wsWrapper.GetProtoType() {
+			case kcwiki_msgtransfer_protobuf.Websocket_SYSTEM:
+				wsSystem := new(kcwiki_msgtransfer_protobuf.WebsocketNonSystem)
+				err := proto.Unmarshal(wsWrapper.GetProtoPayload(), wsSystem)
+				if err != nil {
+					logger.Service.Errorf("Plugin retweet: %s", err.Error())
+					return
 				}
-				return
-			}
-			groupNums := _plugin.broadcast[msg.FromID]
-			if len(groupNums) == 0 {
-				return
-			}
-			switch msg.Cmd {
-			case "1": // 推文
-				// 检测是否有头像
-				if msg.Avatar != "" {
-					go handleAvatar(msg.FromID, msg.FromName, fmt.Sprintf("%s%s", imgRoot, msg.Avatar), groupNums)
+				logger.Service.Successf("Plugin retweet: %s", wsSystem.GetData())
+			case kcwiki_msgtransfer_protobuf.Websocket_NON_SYSTEM:
+				wsNonSystem := new(kcwiki_msgtransfer_protobuf.WebsocketNonSystem)
+				err := proto.Unmarshal(wsWrapper.GetProtoPayload(), wsNonSystem)
+				if err != nil {
+					logger.Service.Errorf("Plugin retweet: %s", err.Error())
+					return
 				}
-				cqMsg := coolq.NewMessage()
-				section := coolq.NewTextSection(msg.Text)
-				cqMsg = coolq.AddSection(cqMsg, section)
-				for _, img := range msg.Imgs {
-					imgSrc := fmt.Sprintf("%s%s", imgRoot, img)
-					log.Printf("包含图片：%s\n", imgSrc)
-					section = coolq.NewImageSection(imgSrc)
+				if wsNonSystem.GetModule() != _plugin.module {
+					return
+				}
+				logger.Service.Successf("Plugin retweet: %s", wsNonSystem.GetData())
+				msg := new(TweetMsg)
+				err = json.Unmarshal([]byte(wsNonSystem.GetData()), msg)
+				if err != nil {
+					logger.Service.Errorf("Plugin retweet: %s", err.Error())
+					return
+				}
+				if !coolq.Client.IsAPIOk() {
+					if msg.Cmd == "1" || msg.Cmd == "2" {
+						logger.Service.Errorf("Plugin retweet: 一条来自%s的消息被弄丢了(因为api连接没有准备好)", msg.FromName)
+					}
+					return
+				}
+				groupNums := _plugin.broadcast[msg.FromID]
+				if len(groupNums) == 0 {
+					return
+				}
+				switch msg.Cmd {
+				case "1": // 推文
+					// 检测是否有头像
+					if msg.Avatar != "" {
+						go handleAvatar(msg.FromID, msg.FromName, fmt.Sprintf("%s%s", _plugin.imageRoot, msg.Avatar), groupNums)
+					}
+					cqMsg := coolq.NewMessage()
+					section := coolq.NewTextSection(msg.Text)
 					cqMsg = coolq.AddSection(cqMsg, section)
+					for _, img := range msg.Imgs {
+						imgSrc := fmt.Sprintf("%s%s", _plugin.imageRoot, img)
+						log.Printf("包含图片：%s\n", imgSrc)
+						section = coolq.NewImageSection(imgSrc)
+						cqMsg = coolq.AddSection(cqMsg, section)
+					}
+					cqMsgTxt := string(coolq.Marshal(cqMsg))
+					logger.Service.Infof("Plugin retweet: 向酷Q发送 -> %s", cqMsgTxt)
+					for _, groupID := range groupNums {
+						coolq.Client.SendGroupMsg(groupID, cqMsgTxt)
+					}
+					logger.Service.Successf("Plugin retweet: 成功转发了一条来自%s(%s)的推文", msg.FromName, msg.FromID)
+				case "2": // 头像
+					handleAvatar(msg.FromID, msg.FromName, fmt.Sprintf("%s%s", _plugin.imageRoot, msg.Avatar), groupNums)
 				}
-				cqMsgTxt := string(coolq.Marshal(cqMsg))
-				logMsg := fmt.Sprintf("向酷Q发送：%s", cqMsgTxt)
-				logger.Service.AddLog(logger.LogTypeInfo, logMsg)
-				for _, groupID := range groupNums {
-					coolq.Client.SendGroupMsg(groupID, cqMsgTxt)
-				}
-				logMsg = fmt.Sprintf("成功转发了一条来自%s(%s)的推文", msg.FromName, msg.FromID)
-				logger.Service.AddLog(logger.LogTypeSuccess, logMsg)
-			case "2": // 头像
-				handleAvatar(msg.FromID, msg.FromName, fmt.Sprintf("%s%s", imgRoot, msg.Avatar), groupNums)
 			}
 		},
 		OnError: func(err error) {
-			msg := err.Error()
-			logger.Service.AddLog(logger.LogTypeError, msg)
+			logger.Service.Errorf("Plugin retweet: %s", err.Error())
 		},
 	}
-	err = _plugin.conn.Dial(_plugin.url, nil)
+	err = _plugin.conn.Dial(_plugin.url,
+		http.Header{
+			"x-access-token": []string{_plugin.secret},
+		})
 	if err != nil {
 		return err
 	}
