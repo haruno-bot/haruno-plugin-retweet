@@ -29,7 +29,7 @@ type Retweet struct {
 }
 
 // Name 插件名称
-func (_plugin Retweet) Name() string {
+func (_plugin *Retweet) Name() string {
 	return fmt.Sprintf("%s@%s", _plugin.name, _plugin.version)
 }
 
@@ -111,7 +111,7 @@ func (_plugin *Retweet) handleAvatar(id, name, url string, groupNums []int64) {
 }
 
 // Load 插件加载
-func (_plugin Retweet) Load() error {
+func (_plugin *Retweet) Load() error {
 	err := _plugin.loadConfig()
 	if err != nil {
 		return err
@@ -137,7 +137,7 @@ func (_plugin Retweet) Load() error {
 					logger.Field(_plugin.Name()).Errorf("%s", err.Error())
 					return
 				}
-				logger.Field(_plugin.Name()).Infof("系统消息：%s", wsSystem.GetData())
+				logger.Field(_plugin.Name()).Infof("「系统消息」%s", wsSystem.GetData())
 			case kcwiki_msgtransfer_protobuf.Websocket_NON_SYSTEM:
 				wsNonSystem := new(kcwiki_msgtransfer_protobuf.WebsocketNonSystem)
 				err := proto.Unmarshal(wsWrapper.GetProtoPayload(), wsNonSystem)
@@ -206,4 +206,4 @@ func (_plugin Retweet) Load() error {
 }
 
 // Instance 转推插件实体
-var Instance = Retweet{}
+var Instance = &Retweet{}
