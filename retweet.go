@@ -3,7 +3,6 @@ package retweet
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 
 	"github.com/golang/protobuf/proto"
@@ -96,19 +95,19 @@ func (_plugin *Retweet) loadConfig() error {
 	return nil
 }
 
-func handleAvatar(id, name, url string, groupNums []int64) {
+func (_plugin *Retweet) handleAvatar(id, name, url string, groupNums []int64) {
 	cqMsg := coolq.NewMessage()
 	section := coolq.NewTextSection(fmt.Sprintf("%s\n更新了头像\n", name))
 	cqMsg = coolq.AddSection(cqMsg, section)
-	logger.Field("Plugin retweet").Infof("头像地址 = %s", url)
+	logger.Field(_plugin.Name()).Infof("头像地址 = %s", url)
 	section = coolq.NewImageSection(url)
 	cqMsg = coolq.AddSection(cqMsg, section)
 	cqMsgTxt := string(coolq.Marshal(cqMsg))
-	logger.Field("Plugin retweet").Infof("向酷Q发送 -> %s", cqMsgTxt)
+	logger.Field(_plugin.Name()).Infof("向酷Q发送 -> %s", cqMsgTxt)
 	for _, groupID := range groupNums {
 		coolq.Client.SendGroupMsg(groupID, cqMsgTxt)
 	}
-	logger.Field("Plugin retweet").Successf("成功转发了一条来自%s(%s)的头像更新信息", name, id)
+	logger.Field(_plugin.Name()).Successf("成功转发了一条来自%s(%s)的头像更新信息", name, id)
 }
 
 // Load 插件加载
@@ -121,13 +120,13 @@ func (_plugin Retweet) Load() error {
 	_plugin.conn = &clients.WSClient{
 		Name: "Plugin retweet",
 		OnConnect: func(conn *clients.WSClient) {
-			logger.Infof("%s 已经连接到转推api服务器", conn.Name)
+			logger.Field(_plugin.Name()).Info("已成功连接 api 服务器")
 		},
 		OnMessage: func(raw []byte) {
 			wsWrapper := new(kcwiki_msgtransfer_protobuf.Websocket)
 			err := proto.Unmarshal(raw, wsWrapper)
 			if err != nil {
-				logger.Field("Plugin retweet").Errorf("%s", err.Error())
+				logger.Field(_plugin.Name()).Errorf("%s", err.Error())
 				return
 			}
 			switch wsWrapper.GetProtoType() {
@@ -135,30 +134,30 @@ func (_plugin Retweet) Load() error {
 				wsSystem := new(kcwiki_msgtransfer_protobuf.WebsocketNonSystem)
 				err := proto.Unmarshal(wsWrapper.GetProtoPayload(), wsSystem)
 				if err != nil {
-					logger.Field("Plugin retweet").Errorf("%s", err.Error())
+					logger.Field(_plugin.Name()).Errorf("%s", err.Error())
 					return
 				}
-				logger.Field("Plugin retweet").Successf("%s", wsSystem.GetData())
+				logger.Field(_plugin.Name()).Infof("系统消息：%s", wsSystem.GetData())
 			case kcwiki_msgtransfer_protobuf.Websocket_NON_SYSTEM:
 				wsNonSystem := new(kcwiki_msgtransfer_protobuf.WebsocketNonSystem)
 				err := proto.Unmarshal(wsWrapper.GetProtoPayload(), wsNonSystem)
 				if err != nil {
-					logger.Field("Plugin retweet").Errorf("%s", err.Error())
+					logger.Field(_plugin.Name()).Errorf("%s", err.Error())
 					return
 				}
 				if wsNonSystem.GetModule() != _plugin.module {
 					return
 				}
-				logger.Field("Plugin retweet").Successf("%s", wsNonSystem.GetData())
+				logger.Field(_plugin.Name()).Successf("%s", wsNonSystem.GetData())
 				msg := new(TweetMsg)
 				err = json.Unmarshal([]byte(wsNonSystem.GetData()), msg)
 				if err != nil {
-					logger.Field("Plugin retweet").Errorf("%s", err.Error())
+					logger.Field(_plugin.Name()).Errorf("%s", err.Error())
 					return
 				}
 				if !coolq.Client.IsAPIOk() {
 					if msg.Cmd == "1" || msg.Cmd == "2" {
-						logger.Field("Plugin retweet").Errorf("一条来自%s的消息被弄丢了(因为api连接没有准备好)", msg.FromName)
+						logger.Field(_plugin.Name()).Errorf("一条来自%s的消息被弄丢了(因为api连接没有准备好)", msg.FromName)
 					}
 					return
 				}
@@ -170,30 +169,30 @@ func (_plugin Retweet) Load() error {
 				case "1": // 推文
 					// 检测是否有头像
 					if msg.Avatar != "" {
-						go handleAvatar(msg.FromID, msg.FromName, fmt.Sprintf("%s%s", _plugin.imageRoot, msg.Avatar), groupNums)
+						go _plugin.handleAvatar(msg.FromID, msg.FromName, fmt.Sprintf("%s%s", _plugin.imageRoot, msg.Avatar), groupNums)
 					}
 					cqMsg := coolq.NewMessage()
 					section := coolq.NewTextSection(msg.Text)
 					cqMsg = coolq.AddSection(cqMsg, section)
 					for _, img := range msg.Imgs {
 						imgSrc := fmt.Sprintf("%s%s", _plugin.imageRoot, img)
-						log.Printf("包含图片：%s\n", imgSrc)
+						logger.Field(_plugin.Name()).Infof("包含图片 %s", imgSrc)
 						section = coolq.NewImageSection(imgSrc)
 						cqMsg = coolq.AddSection(cqMsg, section)
 					}
 					cqMsgTxt := string(coolq.Marshal(cqMsg))
-					logger.Field("Plugin retweet").Infof("向酷Q发送 -> %s", cqMsgTxt)
+					logger.Field(_plugin.Name()).Infof("向酷Q发送 -> %s", cqMsgTxt)
 					for _, groupID := range groupNums {
 						coolq.Client.SendGroupMsg(groupID, cqMsgTxt)
 					}
-					logger.Field("Plugin retweet").Successf("成功转发了一条来自%s(%s)的推文", msg.FromName, msg.FromID)
+					logger.Field(_plugin.Name()).Successf("成功转发了一条来自%s(%s)的推文", msg.FromName, msg.FromID)
 				case "2": // 头像
-					handleAvatar(msg.FromID, msg.FromName, fmt.Sprintf("%s%s", _plugin.imageRoot, msg.Avatar), groupNums)
+					_plugin.handleAvatar(msg.FromID, msg.FromName, fmt.Sprintf("%s%s", _plugin.imageRoot, msg.Avatar), groupNums)
 				}
 			}
 		},
 		OnError: func(err error) {
-			logger.Field("Plugin retweet").Errorf("%s", err.Error())
+			logger.Field(_plugin.Name()).Errorf("%s", err.Error())
 		},
 	}
 	err = _plugin.conn.Dial(_plugin.url,
