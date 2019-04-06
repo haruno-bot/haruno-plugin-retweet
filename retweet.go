@@ -116,7 +116,6 @@ func (_plugin *Retweet) Load() error {
 	if err != nil {
 		return err
 	}
-
 	_plugin.conn = &clients.WSClient{
 		Name: "Plugin retweet",
 		OnConnect: func(conn *clients.WSClient) {
@@ -148,7 +147,6 @@ func (_plugin *Retweet) Load() error {
 				if wsNonSystem.GetModule() != _plugin.module {
 					return
 				}
-				logger.Field(_plugin.Name()).Successf("%s", wsNonSystem.GetData())
 				msg := new(TweetMsg)
 				err = json.Unmarshal([]byte(wsNonSystem.GetData()), msg)
 				if err != nil {
