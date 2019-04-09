@@ -17,8 +17,9 @@ message Websocket {
     }
     ProtoType proto_type = 1;
     ProtoCode proto_code = 2;
-    bytes proto_payload = 5;
-    int64 timestamp = 3;
-    string sign = 4;
+    string proto_module = 3;
+    bytes proto_payload = 4;
+    int64 timestamp = 5;
+    string sign = 6;
 
 }

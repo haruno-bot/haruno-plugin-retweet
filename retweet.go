@@ -130,25 +130,13 @@ func (_plugin *Retweet) Load() error {
 			}
 			switch wsWrapper.GetProtoType() {
 			case kcwiki_msgtransfer_protobuf.Websocket_SYSTEM:
-				wsSystem := new(kcwiki_msgtransfer_protobuf.WebsocketNonSystem)
-				err := proto.Unmarshal(wsWrapper.GetProtoPayload(), wsSystem)
-				if err != nil {
-					logger.Field(_plugin.Name()).Errorf("%s", err.Error())
-					return
-				}
-				logger.Field(_plugin.Name()).Infof("「系统消息」%s", wsSystem.GetData())
+				logger.Field(_plugin.Name()).Info(string(wsWrapper.GetProtoPayload()))
 			case kcwiki_msgtransfer_protobuf.Websocket_NON_SYSTEM:
-				wsNonSystem := new(kcwiki_msgtransfer_protobuf.WebsocketNonSystem)
-				err := proto.Unmarshal(wsWrapper.GetProtoPayload(), wsNonSystem)
-				if err != nil {
-					logger.Field(_plugin.Name()).Errorf("%s", err.Error())
-					return
-				}
-				if wsNonSystem.GetModule() != _plugin.module {
+				if wsWrapper.GetProtoModule() != _plugin.module {
 					return
 				}
 				msg := new(TweetMsg)
-				err = json.Unmarshal([]byte(wsNonSystem.GetData()), msg)
+				err = json.Unmarshal(wsWrapper.GetProtoPayload(), msg)
 				if err != nil {
 					logger.Field(_plugin.Name()).Errorf("%s", err.Error())
 					return
