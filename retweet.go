@@ -117,7 +117,7 @@ func (_plugin *Retweet) Load() error {
 		return err
 	}
 	_plugin.conn = &clients.WSClient{
-		Name: "Plugin retweet",
+		Name: "plugin retweet wsclient",
 		OnConnect: func(conn *clients.WSClient) {
 			logger.Field(_plugin.Name()).Info("已成功连接 api 服务器")
 		},
@@ -125,7 +125,7 @@ func (_plugin *Retweet) Load() error {
 			wsWrapper := new(kcwiki_msgtransfer_protobuf.Websocket)
 			err := proto.Unmarshal(raw, wsWrapper)
 			if err != nil {
-				logger.Field(_plugin.Name()).Errorf("%s", err.Error())
+				logger.Field(_plugin.Name()).Error(err)
 				return
 			}
 			switch wsWrapper.GetProtoType() {
@@ -138,7 +138,7 @@ func (_plugin *Retweet) Load() error {
 				msg := new(TweetMsg)
 				err = json.Unmarshal(wsWrapper.GetProtoPayload(), msg)
 				if err != nil {
-					logger.Field(_plugin.Name()).Errorf("%s", err.Error())
+					logger.Field(_plugin.Name()).Error(err)
 					return
 				}
 				if !coolq.Client.IsAPIOk() {
@@ -178,7 +178,7 @@ func (_plugin *Retweet) Load() error {
 			}
 		},
 		OnError: func(err error) {
-			logger.Field(_plugin.Name()).Errorf("%s", err.Error())
+			logger.Field(_plugin.Name()).Error(err)
 		},
 	}
 	err = _plugin.conn.Dial(_plugin.url,
